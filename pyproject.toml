@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ibn-engine"
+version = "0.1.0"
+description = "Intent-Based Networking engine for an ISP core network"
+requires-python = ">=3.11"
+dependencies = [
+  "Jinja2>=3.1",
+  "PyYAML>=6.0",
+  "netmiko>=4.3",
+  "requests>=2.31",
+]
+
+[tool.setuptools]
+package-dir = {"" = "."}
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["engine*"]

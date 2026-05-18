@@ -1,0 +1,92 @@
+organization:
+  domain: myorg.net
+  as_number: 65001
+
+networks:
+  - name: net_1_3
+    cidr: 10.0.1.0/29
+    gateways:
+      - name: router1
+        ip: 10.0.1.2
+      - name: router3
+        ip: 10.0.1.3
+  - name: net_1_2
+    cidr: 10.0.1.8/29
+    gateways:
+      - name: router1
+        ip: 10.0.1.10
+      - name: router2
+        ip: 10.0.1.11
+  - name: net_2_3
+    cidr: 10.0.1.16/29
+    gateways:
+      - name: router2
+        ip: 10.0.1.18
+      - name: router3
+        ip: 10.0.1.19
+  - name: dmz_net
+    cidr: 172.16.123.128/28
+    gateways:
+      - name: router2
+        ip: 172.16.123.142
+      - name: router3
+        ip: 172.16.123.143
+
+routing:
+  ospf:
+    area: 0
+    router_id: 1.1.1.1
+    networks:
+      - 10.0.1.0/29
+      - 10.0.1.8/29
+      - 10.0.1.16/29
+      - 172.16.123.128/28
+    reverse_zone: "123.16.172.in-addr.arpa"   # PTR records for DMZ
+    reverse_prefix: "172.16.123"               # used as zone filename prefix
+  bgp:
+    neighbors:
+      - as: 65002
+        neighbor_ip: 172.31.255.252
+
+services:
+  dns:
+    primary: dns.myorg.net
+    ns2_ip: 172.16.123.139    # allow-transfer target (nagios reuses this IP in lab3)
+    zones:
+      myorg.net:
+        - name: ns1
+          ip: 172.16.123.138
+        - name: ns2
+          ip: 172.16.123.139
+        - name: dns
+          ip: 172.16.123.138
+        - name: router
+          ip: 172.16.123.142
+        - name: lb
+          ip: 172.16.123.136
+        - name: www
+          ip: 172.16.123.136
+        - name: www1
+          ip: 172.16.123.130
+        - name: www2
+          ip: 172.16.123.131
+        - name: www3
+          ip: 172.16.123.132
+        - name: www4
+          ip: 172.16.123.133
+        - name: nagios
+          ip: 172.16.123.139
+  web:
+    replicas: 4
+    upstream_name: www_pool
+    servers:
+      - name: www1
+        ip: 172.16.123.130
+      - name: www2
+        ip: 172.16.123.131
+      - name: www3
+        ip: 172.16.123.132
+      - name: www4
+        ip: 172.16.123.133
+  monitoring:
+    nagios_url: http://172.16.123.139/nagios

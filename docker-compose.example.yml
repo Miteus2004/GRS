@@ -1,0 +1,186 @@
+networks:
+  net_1_3:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.0.1.0/29
+  net_1_2:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.0.1.8/29
+  net_2_3:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.0.1.16/29
+  dmz_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.16.123.128/28
+          gateway: 172.16.123.129
+  client_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.0.1.0/24
+          gateway: 10.0.1.253
+  public_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.31.255.0/24
+          gateway: 172.31.255.1
+
+services:
+
+  # ── Routers ────────────────────────────────────────────────────────────────
+
+  router1:
+    image: netubuntu:latest
+    container_name: org1_router1
+    hostname: router1
+    privileged: true
+    command: sh -c "sysctl -w net.ipv4.ip_forward=1 && tail -f /dev/null"
+    volumes:
+      - ./out/zebra.conf:/etc/quagga/zebra.conf:ro
+      - ./out/ospfd.conf:/etc/quagga/ospfd.conf:ro
+    networks:
+      net_1_3:
+        ipv4_address: 10.0.1.2
+      net_1_2:
+        ipv4_address: 10.0.1.10
+      public_net:
+        ipv4_address: 172.31.255.253
+
+  router2:
+    image: netubuntu:latest
+    container_name: org1_router2
+    hostname: router2
+    privileged: true
+    command: sh -c "sysctl -w net.ipv4.ip_forward=1 && tail -f /dev/null"
+    volumes:
+      - ./out/zebra.conf:/etc/quagga/zebra.conf:ro
+      - ./out/ospfd.conf:/etc/quagga/ospfd.conf:ro
+    networks:
+      net_2_3:
+        ipv4_address: 10.0.1.18
+      net_1_2:
+        ipv4_address: 10.0.1.11
+      dmz_net:
+        ipv4_address: 172.16.123.142
+
+  router3:
+    image: netubuntu:latest
+    container_name: org1_router3
+    hostname: router3
+    privileged: true
+    command: sh -c "sysctl -w net.ipv4.ip_forward=1 && tail -f /dev/null"
+    volumes:
+      - ./out/zebra.conf:/etc/quagga/zebra.conf:ro
+      - ./out/ospfd.conf:/etc/quagga/ospfd.conf:ro
+    networks:
+      net_1_3:
+        ipv4_address: 10.0.1.3
+      net_2_3:
+        ipv4_address: 10.0.1.19
+      dmz_net:
+        ipv4_address: 172.16.123.143
+
+  # ── DNS ────────────────────────────────────────────────────────────────────
+
+  dns:
+    build: ./dns                    # Dockerfile: FROM netubuntu + bind9
+    container_name: dns
+    hostname: dns
+    privileged: true
+    volumes:
+      - ./out/named.conf.options:/etc/bind/named.conf.options:ro
+      - ./out/named.conf.local:/etc/bind/named.conf.local:ro
+      - ./out/db.myorg.net:/etc/bind/db.myorg.net:ro
+      - ./out/db.172.16.123:/etc/bind/db.172.16.123:ro
+    networks:
+      dmz_net:
+        ipv4_address: 172.16.123.138
+
+  # ── Load balancer ──────────────────────────────────────────────────────────
+
+  lb:
+    image: nginx:latest
+    container_name: lb
+    hostname: lb
+    volumes:
+      - ./out/nginx.conf:/etc/nginx/nginx.conf:ro   # full nginx.conf, not conf.d snippet
+    networks:
+      dmz_net:
+        ipv4_address: 172.16.123.136
+
+  # ── Web replicas ───────────────────────────────────────────────────────────
+
+  www1:
+    image: nginx:latest
+    container_name: www1
+    hostname: www1
+    networks:
+      dmz_net:
+        ipv4_address: 172.16.123.130
+
+  www2:
+    image: nginx:latest
+    container_name: www2
+    hostname: www2
+    networks:
+      dmz_net:
+        ipv4_address: 172.16.123.131
+
+  www3:
+    image: nginx:latest
+    container_name: www3
+    hostname: www3
+    networks:
+      dmz_net:
+        ipv4_address: 172.16.123.132
+
+  www4:
+    image: nginx:latest
+    container_name: www4
+    hostname: www4
+    networks:
+      dmz_net:
+        ipv4_address: 172.16.123.133
+
+  # ── Nagios ─────────────────────────────────────────────────────────────────
+
+  nagios:
+    image: jasonrivers/nagios:latest
+    container_name: nagios
+    hostname: nagios
+    networks:
+      dmz_net:
+        ipv4_address: 172.16.123.139
+    ports:
+      - "8081:80"
+
+  # ── Client ─────────────────────────────────────────────────────────────────
+
+  client:
+    image: netubuntu:latest
+    container_name: client
+    hostname: client
+    command: >
+      sh -c "/sbin/ip route replace default via 172.16.123.142 && tail -f /dev/null"
+    networks:
+      dmz_net:
+        ipv4_address: 172.16.123.144
+
+  # ── External / BGP peer ────────────────────────────────────────────────────
+
+  externalhost:
+    image: netubuntu:latest
+    container_name: externalhost
+    hostname: externalhost
+    command: ["tail", "-f", "/dev/null"]
+    networks:
+      public_net:
+        ipv4_address: 172.31.255.254

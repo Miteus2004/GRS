@@ -1,0 +1,17 @@
+$TTL    604800
+@       IN      SOA     ns1.{{ organization.domain }}. admin.{{ organization.domain }}. (
+                        2026051801  ; Serial
+                        3600        ; Refresh
+                        900         ; Retry
+                        604800      ; Expire
+                        86400 )     ; Negative Cache TTL
+
+; Name Servers
+@       IN      NS      ns1.{{ organization.domain }}.
+@       IN      NS      ns2.{{ organization.domain }}.
+
+{% for zname, records in services.dns.zones.items() %}
+{% for r in records %}
+{{ r.name }}        IN  A   {{ r.ip }}
+{% endfor %}
+{% endfor %}

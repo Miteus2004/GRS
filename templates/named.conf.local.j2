@@ -1,0 +1,11 @@
+zone "{{ organization.domain }}" {
+    type master;
+    file "/etc/bind/db.{{ organization.domain }}";
+    allow-transfer { {{ services.dns.ns2_ip }}; };
+};
+
+zone "{{ routing.ospf.reverse_zone }}" {
+    type master;
+    file "/etc/bind/db.{{ routing.ospf.reverse_prefix }}";
+    allow-transfer { {{ services.dns.ns2_ip }}; };
+};
