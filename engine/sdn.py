@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from .policy import PATH_PROFILES, build_flow_payload, decide_path, summarize_decision
+
 try:
     import requests
 except ImportError as exc:
@@ -11,21 +13,6 @@ except ImportError as exc:
     _requests_error = exc
 else:
     _requests_error = None
-
-# Pre-defined path profiles keyed by name
-PATH_PROFILES: dict[str, dict] = {
-    "primary": {
-        "priority": 200,
-        "match":   {"eth_type": 0x0800},
-        "actions": [{"type": "OUTPUT", "port": 1}],
-    },
-    "backup": {
-        "priority": 200,
-        "match":   {"eth_type": 0x0800},
-        "actions": [{"type": "OUTPUT", "port": 2}],
-    },
-}
-
 
 class RyuClient:
     """Thin wrapper around the Ryu REST API for flow rule management."""
@@ -61,8 +48,18 @@ class RyuClient:
 
     def activate_path(self, dpid: int, profile: str) -> Any:
         """Activate a named path profile (primary or backup)."""
-        p = PATH_PROFILES[profile]
-        return self.push_flow(dpid, p["priority"], p["match"], p["actions"])
+        payload = build_flow_payload(dpid, profile)
+        return self.push_flow(payload["dpid"], payload["priority"], payload["match"], payload["actions"])
 
     def list_switches(self) -> list[int]:
         return self._get("/stats/switches")
+
+
+def choose_path(congested_hosts: list[str]) -> str:
+    """Return the path name the engine should activate."""
+    return decide_path(congested_hosts).path
+
+
+def path_summary(congested_hosts: list[str]) -> dict[str, Any]:
+    """Return a compact summary for status output and tests."""
+    return summarize_decision(congested_hosts)

@@ -1,0 +1,11 @@
+zone "myorg.net" {
+    type master;
+    file "/etc/bind/db.myorg.net";
+    allow-transfer { 172.16.123.139; };
+};
+
+zone "123.16.172.in-addr.arpa" {
+    type master;
+    file "/etc/bind/db.172.16.123";
+    allow-transfer { 172.16.123.139; };
+};

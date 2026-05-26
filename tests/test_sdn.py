@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from engine.sdn import RyuClient, PATH_PROFILES
+from engine.sdn import RyuClient, PATH_PROFILES, choose_path, path_summary
 
 
 @patch("engine.sdn.requests")
@@ -79,3 +79,18 @@ def test_delete_flow_posts_to_correct_endpoint(mock_req):
 
     url = mock_req.post.call_args[0][0]
     assert "delete" in url
+
+
+def test_choose_path_returns_backup_when_congested():
+    assert choose_path(["router2"]) == "backup"
+
+
+def test_choose_path_returns_primary_when_clear():
+    assert choose_path([]) == "primary"
+
+
+def test_path_summary_includes_profiles_and_sorted_hosts():
+    summary = path_summary(["router3", "router1"])
+    assert summary["path"] == "backup"
+    assert summary["congested_hosts"] == ["router1", "router3"]
+    assert "primary" in summary["profiles"]

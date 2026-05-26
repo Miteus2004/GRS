@@ -1,0 +1,21 @@
+$TTL    604800
+@       IN      SOA     ns1.myorg.net. admin.myorg.net. (
+                        2026051801  ; Serial
+                        3600        ; Refresh
+                        900         ; Retry
+                        604800      ; Expire
+                        86400 )     ; Negative Cache TTL
+
+@       IN      NS      ns1.myorg.net.
+
+138   IN  PTR ns1.myorg.net.
+139   IN  PTR ns2.myorg.net.
+138   IN  PTR dns.myorg.net.
+142   IN  PTR router.myorg.net.
+136   IN  PTR lb.myorg.net.
+136   IN  PTR www.myorg.net.
+130   IN  PTR www1.myorg.net.
+131   IN  PTR www2.myorg.net.
+132   IN  PTR www3.myorg.net.
+133   IN  PTR www4.myorg.net.
+139   IN  PTR nagios.myorg.net.

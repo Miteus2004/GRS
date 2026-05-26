@@ -51,7 +51,7 @@ routing:
 services:
   dns:
     primary: dns.myorg.net
-    ns2_ip: 172.16.123.139    # allow-transfer target (nagios reuses this IP in lab3)
+    ns2_ip: 172.16.123.139    
     zones:
       myorg.net:
         - name: ns1

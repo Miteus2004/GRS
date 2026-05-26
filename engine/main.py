@@ -10,7 +10,7 @@ from .parser import load_intent
 from .renderer import TemplateRenderer
 from .provisioner import Provisioner
 from .monitor import NagiosClient
-from .sdn import RyuClient
+from .sdn import RyuClient, choose_path, path_summary
 
 
 def build_argument_parser() -> argparse.ArgumentParser:
@@ -61,13 +61,18 @@ def reconcile(
             try:
                 client = NagiosClient(nagios_url)
                 bad = client.congested_hosts()
+                ryu = RyuClient(ryu_url)
+                switches = ryu.list_switches()
                 if bad:
-                    print(f"[IBN] Congestion detected on: {bad} — activating backup path")
-                    ryu = RyuClient(ryu_url)
-                    for dpid in ryu.list_switches():
-                        ryu.activate_path(dpid, "backup")
+                    decision = path_summary(bad)
+                    path = choose_path(bad)
+                    print(f"[IBN] Congestion detected on: {bad} — activating {path} path")
+                    for dpid in switches:
+                        ryu.activate_path(dpid, path)
                 else:
-                    print("[IBN] All hosts OK — primary path active")
+                    print("[IBN] All hosts OK — activating primary path")
+                    for dpid in switches:
+                        ryu.activate_path(dpid, "primary")
             except Exception as exc:
                 print(f"[IBN] Monitor check failed: {exc}", file=sys.stderr)
 

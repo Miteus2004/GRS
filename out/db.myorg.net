@@ -1,0 +1,23 @@
+$TTL    604800
+@       IN      SOA     ns1.myorg.net. admin.myorg.net. (
+                        2026051801  ; Serial
+                        3600        ; Refresh
+                        900         ; Retry
+                        604800      ; Expire
+                        86400 )     ; Negative Cache TTL
+
+; Name Servers
+@       IN      NS      ns1.myorg.net.
+@       IN      NS      ns2.myorg.net.
+
+ns1        IN  A   172.16.123.138
+ns2        IN  A   172.16.123.139
+dns        IN  A   172.16.123.138
+router        IN  A   172.16.123.142
+lb        IN  A   172.16.123.136
+www        IN  A   172.16.123.136
+www1        IN  A   172.16.123.130
+www2        IN  A   172.16.123.131
+www3        IN  A   172.16.123.132
+www4        IN  A   172.16.123.133
+nagios        IN  A   172.16.123.139

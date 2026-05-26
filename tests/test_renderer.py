@@ -50,7 +50,7 @@ def test_render_bundle_produces_all_files():
     bundle = TemplateRenderer(TEMPLATES_DIR).render_bundle(intent)
     reverse_prefix = intent["routing"]["ospf"]["reverse_prefix"]
     expected = {
-        "ospfd.conf", "zebra.conf",
+        "ospfd.conf", "zebra.conf", "bgpd.conf",
         "named.conf.options", "named.conf.local",
         f"db.{domain}",
         f"db.{reverse_prefix}",
@@ -81,11 +81,11 @@ def test_ospfd_conf_contains_all_networks():
     for net in intent["routing"]["ospf"]["networks"]:
         assert net in ospfd
 
-def test_ospfd_conf_contains_bgp_neighbor():
+def test_bgpd_conf_contains_bgp_neighbor():
     intent = load_intent(INTENT_FILE)
     bundle = TemplateRenderer(TEMPLATES_DIR).render_bundle(intent)
     neighbor_ip = intent["routing"]["bgp"]["neighbors"][0]["neighbor_ip"]
-    assert neighbor_ip in bundle["ospfd.conf"]
+    assert neighbor_ip in bundle["bgpd.conf"]
 
 def test_zone_file_has_correct_records():
     intent = load_intent(INTENT_FILE)
@@ -101,6 +101,6 @@ def test_write_bundle_creates_files_on_disk():
     intent = load_intent(INTENT_FILE)
     with tempfile.TemporaryDirectory() as tmpdir:
         written = TemplateRenderer(TEMPLATES_DIR).write_bundle(intent, tmpdir)
-        assert len(written) == 7
+        assert len(written) == 14
         for path in written.values():
             assert path.exists() and path.stat().st_size > 0

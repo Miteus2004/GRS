@@ -1,0 +1,20 @@
+hostname BGP
+log file /var/log/quagga/bgpd.log
+log stdout
+password Quagga
+enable password Quagga
+
+access-list FilterInternal permit 10.0.0.0/8
+access-list AllowExternal permit 172.16.0.0/12
+
+route-map rm-filter-internal deny 10
+ match ip address FilterInternal
+route-map rm-filter-internal permit 20
+ match ip address AllowExternal
+
+router bgp {{ organization.as_number }}
+ redistribute ospf route-map rm-filter-internal
+{% for n in routing.bgp.neighbors %}
+ neighbor {{ n.neighbor_ip }} remote-as {{ n.as }}
+ neighbor {{ n.neighbor_ip }} activate
+{% endfor %}

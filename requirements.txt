@@ -1,3 +1,8 @@
-jinja2
-pyyaml
-netmiko
+Jinja2>=3.1
+PyYAML>=6.0
+netmiko>=4.4
+requests>=2.31
+fastapi==0.95.2
+uvicorn[standard]==0.22.0
+textfsm<2.0.0
+ryu==4.34; python_version < "3.12"

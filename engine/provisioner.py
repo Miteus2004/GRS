@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
+import warnings
 from typing import Any
+
+warnings.filterwarnings(
+    "ignore",
+    message=r"Python 3\.8 is no longer supported by the Python core team.*",
+    category=DeprecationWarning,
+)
 
 try:
     from netmiko import ConnectHandler, NetmikoTimeoutException, NetmikoAuthenticationException
