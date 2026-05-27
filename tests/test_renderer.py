@@ -12,7 +12,7 @@ from engine.renderer import TemplateRenderer
 
 PROJECT_ROOT = Path(__file__).parent.parent
 TEMPLATES_DIR = PROJECT_ROOT / "templates"
-INTENT_FILE   = PROJECT_ROOT / "intent.example.yaml"
+INTENT_FILE   = PROJECT_ROOT / "intent.yaml"
 
 
 # ── Parser ──────────────────────────────────────────────────────────────────

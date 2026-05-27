@@ -20,12 +20,6 @@ networks:
       config:
         - subnet: 172.16.123.128/28
           gateway: 172.16.123.129
-  client_net:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 10.0.1.0/24
-          gateway: 10.0.1.253
   public_net:
     driver: bridge
     ipam:
@@ -35,7 +29,7 @@ networks:
 
 services:
 
-  # ── Router1 — OSPF + BGP speaker ──────────────────────────────────────────
+  # ── Router1 — OSPF + BGP + OVS ───────────────────────────────────────────
   router1:
     build: ./baseimage
     image: netubuntu:latest
@@ -44,13 +38,7 @@ services:
     privileged: true
     environment:
       ENABLE_OVS: "1"
-      RYU_CONTROLLER: 172.16.123.150
-    command: >
-      sh -c "sysctl -w net.ipv4.ip_forward=1 &&
-             systemctl start zebra &&
-             systemctl start ospfd &&
-             systemctl start bgpd &&
-             /root/sleep.sh"
+      RYU_CONTROLLER: "172.31.255.137"
     volumes:
       - ./out/router1/zebra.conf:/etc/quagga/zebra.conf:ro
       - ./out/router1/ospfd.conf:/etc/quagga/ospfd.conf:ro
@@ -63,7 +51,7 @@ services:
       public_net:
         ipv4_address: 172.31.255.253
 
-  # ── Router2 — OSPF only ───────────────────────────────────────────────────
+  # ── Router2 — OSPF + OVS ─────────────────────────────────────────────────
   router2:
     build: ./baseimage
     image: netubuntu:latest
@@ -72,12 +60,7 @@ services:
     privileged: true
     environment:
       ENABLE_OVS: "1"
-      RYU_CONTROLLER: 172.16.123.150
-    command: >
-      sh -c "sysctl -w net.ipv4.ip_forward=1 &&
-             systemctl start zebra &&
-             systemctl start ospfd &&
-             /root/sleep.sh"
+      RYU_CONTROLLER: "172.16.123.137"
     volumes:
       - ./out/router2/zebra.conf:/etc/quagga/zebra.conf:ro
       - ./out/router2/ospfd.conf:/etc/quagga/ospfd.conf:ro
@@ -89,7 +72,7 @@ services:
       dmz_net:
         ipv4_address: 172.16.123.142
 
-  # ── Router3 — OSPF only ───────────────────────────────────────────────────
+  # ── Router3 — OSPF + OVS ─────────────────────────────────────────────────
   router3:
     build: ./baseimage
     image: netubuntu:latest
@@ -98,12 +81,7 @@ services:
     privileged: true
     environment:
       ENABLE_OVS: "1"
-      RYU_CONTROLLER: 172.16.123.150
-    command: >
-      sh -c "sysctl -w net.ipv4.ip_forward=1 &&
-             systemctl start zebra &&
-             systemctl start ospfd &&
-             /root/sleep.sh"
+      RYU_CONTROLLER: "172.16.123.137"
     volumes:
       - ./out/router3/zebra.conf:/etc/quagga/zebra.conf:ro
       - ./out/router3/ospfd.conf:/etc/quagga/ospfd.conf:ro
@@ -120,7 +98,7 @@ services:
     build: ./dns
     container_name: dns
     hostname: dns
-    entrypoint: ["/usr/sbin/named","-g","-u","bind"]
+    entrypoint: ["/usr/sbin/named", "-g", "-u", "bind"]
     privileged: true
     volumes:
       - ./out/named.conf.options:/etc/bind/named.conf.options:ro
@@ -183,14 +161,62 @@ services:
     ports:
       - "8081:80"
 
+  # ── IBN engine dashboard (FastAPI) ────────────────────────────────────────
+  engine:
+    build:
+      context: .
+      dockerfile: engine/Dockerfile
+    container_name: ibn_engine
+    hostname: ibn_engine
+    volumes:
+      - ./intent.yaml:/intent.yaml:ro
+    ports:
+      - "5000:8000"
+    networks:
+      dmz_net:
+        ipv4_address: 172.16.123.140
+      net_1_3:
+        ipv4_address: 10.0.1.4
+      net_1_2:
+        ipv4_address: 10.0.1.12
+      net_2_3:
+        ipv4_address: 10.0.1.20
+
+  # ── Ryu SDN controller ────────────────────────────────────────────────────
+  ryu:
+    build:
+      context: .
+      dockerfile: engine/Dockerfile
+    container_name: ibn_ryu
+    hostname: ibn_ryu
+    command:
+      - python
+      - -c
+      - >-
+        import sitecustomize, sys;
+        from ryu.cmd.manager import main;
+        sys.exit(main())
+      - ryu_app/ibn_controller.py
+      - --wsapi-port
+      - "8080"
+      - --ofp-tcp-listen-port
+      - "6633"
+    ports:
+      - "8080:8080"
+      - "6633:6633"
+    networks:
+      dmz_net:
+        ipv4_address: 172.16.123.137
+      public_net:
+        ipv4_address: 172.31.255.137
+
   # ── Client ────────────────────────────────────────────────────────────────
   client:
     build: ./baseimage
-    image: netubuntu:latest
     container_name: client
     hostname: client
     privileged: true
-    entrypoint: ["sh","-c","/sbin/ip route replace default via 172.16.123.142 && tail -f /dev/null"]
+    entrypoint: ["sh", "-c", "/sbin/ip route replace default via 172.16.123.142 && tail -f /dev/null"]
     networks:
       dmz_net:
         ipv4_address: 172.16.123.135
@@ -201,35 +227,13 @@ services:
     image: netubuntu:latest
     container_name: externalhost
     hostname: externalhost
-    command: ["tail", "-f", "/dev/null"]
+    entrypoint: ["/root/start.sh"]
+    privileged: true
+    environment:
+      ENABLE_OVS: "0"
     networks:
       public_net:
-        ipv4_address: 172.31.255.254
-
-  engine:
-    build:
-      context: .
-      dockerfile: engine/Dockerfile
-    container_name: ibn_engine
-    hostname: ibn_engine
-    ports:
-      - "5000:8000"
-    networks:
-      dmz_net:
-        ipv4_address: 172.16.123.140
-      net_1_3:
-      net_2_3:
-
-  ryu:
-    build:
-      context: .
-      dockerfile: engine/Dockerfile
-    container_name: ibn_ryu
-    hostname: ibn_ryu
-    command: ["ryu-manager", "ryu_app/ibn_controller.py", "--wsapi-port", "8080", "--ofp-tcp-listen-port", "6633"]
-    ports:
-      - "8080:8080"
-      - "6633:6633"
-    networks:
-      dmz_net:
-        ipv4_address: 172.16.123.150
+        ipv4_address: 172.31.255.252
+    volumes:
+      - ./out/externalhost/zebra.conf:/etc/quagga/zebra.conf:ro
+      - ./out/externalhost/bgpd.conf:/etc/quagga/bgpd.conf:ro

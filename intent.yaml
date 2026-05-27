@@ -41,8 +41,8 @@ routing:
       - 10.0.1.8/29
       - 10.0.1.16/29
       - 172.16.123.128/28
-    reverse_zone: "123.16.172.in-addr.arpa"   # PTR records for DMZ
-    reverse_prefix: "172.16.123"               # used as zone filename prefix
+    reverse_zone: "123.16.172.in-addr.arpa"
+    reverse_prefix: "172.16.123"
   bgp:
     neighbors:
       - as: 65002
@@ -51,7 +51,7 @@ routing:
 services:
   dns:
     primary: dns.myorg.net
-    ns2_ip: 172.16.123.139    
+    ns2_ip: 172.16.123.139
     zones:
       myorg.net:
         - name: ns1

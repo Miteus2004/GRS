@@ -72,13 +72,13 @@ def test_invalid_profile_raises():
 def test_delete_flow_posts_to_correct_endpoint(mock_req):
     mock_resp = MagicMock()
     mock_resp.json.return_value = {}
-    mock_req.post.return_value = mock_resp
+    mock_req.delete.return_value = mock_resp
 
     client = RyuClient()
     client.delete_flow(1, {"eth_type": 0x0800})
 
-    url = mock_req.post.call_args[0][0]
-    assert "delete" in url
+    url = mock_req.delete.call_args[0][0]
+    assert url.endswith("/ibn/flow")
 
 
 def test_choose_path_returns_backup_when_congested():

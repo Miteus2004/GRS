@@ -48,7 +48,7 @@ def test_reconcile_activates_primary_when_clear(monkeypatch, tmp_path):
     fake_ryu = FakeRyu([1, 2])
     monkeypatch.setattr(engine_main, "RyuClient", lambda url: fake_ryu)
 
-    exit_code = engine_main.reconcile("intent.example.yaml", "templates", str(tmp_path / "out"), monitor=True)
+    exit_code = engine_main.reconcile("intent.yaml", "templates", str(tmp_path / "out"), monitor=True)
 
     assert exit_code == 0
     assert fake_ryu.calls == [(1, "primary"), (2, "primary")]
@@ -62,7 +62,7 @@ def test_reconcile_activates_backup_when_congested(monkeypatch, tmp_path):
     fake_ryu = FakeRyu([7])
     monkeypatch.setattr(engine_main, "RyuClient", lambda url: fake_ryu)
 
-    exit_code = engine_main.reconcile("intent.example.yaml", "templates", str(tmp_path / "out"), monitor=True)
+    exit_code = engine_main.reconcile("intent.yaml", "templates", str(tmp_path / "out"), monitor=True)
 
     assert exit_code == 0
     assert fake_ryu.calls == [(7, "backup")]

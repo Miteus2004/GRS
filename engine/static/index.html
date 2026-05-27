@@ -1,26 +1,250 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>IBN Engine Dashboard</title>
-  <style>body{font-family:Arial,Helvetica,sans-serif;padding:20px} pre{background:#f4f4f4;padding:10px}</style>
-  <script>
-  async function fetchOspf(){
-    const r=await fetch('/api/ospf_neighbors');
-    const j=await r.json(); document.getElementById('ospf').textContent=JSON.stringify(j,null,2);
-  }
-  async function fetchBgp(){
-    const r=await fetch('/api/bgp_summary');
-    const j=await r.json(); document.getElementById('bgp').textContent=JSON.stringify(j,null,2);
-  }
-  </script>
+  <title>IBN Engine — Live Dashboard</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:system-ui,sans-serif;background:#0f1117;color:#e2e8f0;padding:1.5rem}
+    h1{font-size:1.25rem;font-weight:600;margin-bottom:1.25rem;color:#fff}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem}
+    .card{background:#1a1f2e;border:1px solid #2d3748;border-radius:8px;padding:1rem}
+    .card h2{font-size:.875rem;font-weight:600;color:#63b3ed;margin-bottom:.75rem;
+             display:flex;align-items:center;justify-content:space-between}
+    .btn{font-size:.75rem;padding:3px 10px;border-radius:4px;cursor:pointer;
+         background:#2d3748;color:#e2e8f0;border:1px solid #4a5568}
+    .btn:hover{background:#4a5568}
+    .btn-refresh{background:#2b6cb0;border-color:#2b6cb0}
+    .btn-refresh:hover{background:#2c5282}
+    table{width:100%;border-collapse:collapse;font-size:.8rem}
+    th{text-align:left;padding:6px 8px;color:#a0aec0;border-bottom:1px solid #2d3748;font-weight:500}
+    td{padding:5px 8px;border-bottom:1px solid #1e2533}
+    tr:last-child td{border-bottom:none}
+    .pill{display:inline-block;padding:1px 8px;border-radius:9999px;font-size:.7rem;font-weight:600}
+    .full{background:#1a4731;color:#68d391}
+    .established{background:#1a4731;color:#68d391}
+    .down,.idle,.active{background:#4a1f1f;color:#fc8181}
+    .unknown{background:#2d2d1a;color:#f6e05e}
+    .error-row td{color:#fc8181;font-size:.75rem}
+    .status-bar{display:flex;gap:.5rem;align-items:center;margin-bottom:1rem;flex-wrap:wrap}
+    .indicator{display:flex;align-items:center;gap:6px;font-size:.8rem;
+               background:#1a1f2e;border:1px solid #2d3748;border-radius:6px;padding:4px 10px}
+    .dot{width:8px;height:8px;border-radius:50%}
+    .dot-ok{background:#68d391}
+    .dot-warn{background:#f6e05e}
+    .dot-err{background:#fc8181}
+    .dot-unknown{background:#718096}
+    .sync-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.75rem}
+    .sync-item{border:1px solid #2d3748;border-radius:8px;padding:.75rem;background:#141923}
+    .sync-item h3{font-size:.8rem;margin-bottom:.35rem;color:#fff;display:flex;justify-content:space-between;gap:.5rem}
+    .sync-meta{font-size:.72rem;color:#a0aec0;line-height:1.4}
+    .ts{font-size:.7rem;color:#718096;text-align:right;margin-top:.5rem}
+    pre{font-size:.75rem;color:#a0aec0;white-space:pre-wrap;max-height:200px;overflow-y:auto}
+    .auto-row{display:flex;align-items:center;gap:.5rem;margin-bottom:.75rem}
+    .auto-row label{font-size:.8rem;color:#a0aec0}
+    @media(max-width:600px){.grid{grid-template-columns:1fr}}
+  </style>
 </head>
 <body>
-  <h1>IBN Engine — Quick Dashboard</h1>
-  <p>Use the buttons to run live checks against router containers.</p>
-  <button onclick="fetchOspf()">Check OSPF Neighbors</button>
-  <pre id="ospf">(no data)</pre>
-  <button onclick="fetchBgp()">Check BGP Summary</button>
-  <pre id="bgp">(no data)</pre>
+
+<h1>IBN Engine — Live Dashboard</h1>
+
+<div class="status-bar" id="statusBar">
+  <div class="indicator"><div class="dot dot-unknown" id="dotOspf"></div> OSPF</div>
+  <div class="indicator"><div class="dot dot-unknown" id="dotBgp"></div> BGP</div>
+  <div class="indicator"><div class="dot dot-unknown" id="dotRyu"></div> Ryu/OVS</div>
+  <div class="indicator"><div class="dot dot-unknown" id="dotSync"></div> Sync</div>
+</div>
+
+<div class="auto-row">
+  <input type="checkbox" id="autoRefresh" onchange="toggleAuto()">
+  <label for="autoRefresh">Auto-refresh every 10 s</label>
+  <button class="btn btn-refresh" onclick="refreshAll()">↺ Refresh all</button>
+</div>
+
+<div class="card" style="margin-bottom:1rem">
+  <h2>Sync Status <button class="btn" onclick="fetchSync()">Fetch</button></h2>
+  <div id="syncContent"><p style="color:#718096;font-size:.8rem">Compare desired YAML to current deployed state</p></div>
+  <div class="ts" id="syncTs"></div>
+</div>
+
+<div class="grid">
+  <!-- OSPF card -->
+  <div class="card">
+    <h2>OSPF Neighbors <button class="btn" onclick="fetchOspf()">Fetch</button></h2>
+    <div id="ospfContent"><p style="color:#718096;font-size:.8rem">Click Fetch or Refresh all</p></div>
+    <div class="ts" id="ospfTs"></div>
+  </div>
+
+  <!-- BGP card -->
+  <div class="card">
+    <h2>BGP Summary <button class="btn" onclick="fetchBgp()">Fetch</button></h2>
+    <div id="bgpContent"><p style="color:#718096;font-size:.8rem">Click Fetch or Refresh all</p></div>
+    <div class="ts" id="bgpTs"></div>
+  </div>
+</div>
+
+<!-- SDN card -->
+<div class="card" style="margin-bottom:1rem">
+  <h2>SDN — Ryu Flow Rules
+    <span>
+      <button class="btn" onclick="fetchFlows()">Fetch flows</button>
+      <button class="btn" style="background:#276749;border-color:#276749" onclick="activatePath('primary')">→ Primary</button>
+      <button class="btn" style="background:#744210;border-color:#744210" onclick="activatePath('backup')">→ Backup</button>
+    </span>
+  </h2>
+  <div id="sdnContent"><p style="color:#718096;font-size:.8rem">Click Fetch flows to inspect OVS flow tables</p></div>
+  <div class="ts" id="sdnTs"></div>
+</div>
+
+<script>
+let autoTimer = null;
+
+function ts(id){ document.getElementById(id).textContent = "Updated " + new Date().toLocaleTimeString(); }
+
+function stateClass(s){
+  if(!s) return "unknown";
+  const l = s.toLowerCase();
+  if(l.includes("full")) return "full";
+  if(l.includes("established")) return "established";
+  if(l.includes("down")) return "down";
+  if(l.includes("idle")||l.includes("active")||l.includes("connect")) return "idle";
+  return "unknown";
+}
+
+function setDot(id, ok){ document.getElementById(id).className = "dot dot-"+(ok===true?"ok":ok===false?"err":ok==="warn"?"warn":"unknown"); }
+
+async function fetchOspf(){
+  try{
+    const r = await fetch('/api/ospf_neighbors');
+    const data = await r.json();
+    let html = "";
+    let allFull = true;
+    for(const [router, val] of Object.entries(data)){
+      if(val.error){ html += `<p class="error-row" style="font-size:.75rem;color:#fc8181">❌ ${router}: ${val.error}</p>`; allFull=false; continue; }
+      const rows = val.parsed || [];
+      html += `<p style="font-size:.75rem;color:#a0aec0;margin:.4rem 0 .25rem">${router}</p>`;
+      if(!rows.length){ html += `<p style="font-size:.75rem;color:#f6e05e">No neighbors</p>`; allFull=false; continue; }
+      html += `<table><tr><th>Neighbor</th><th>State</th><th>Address</th><th>Interface</th></tr>`;
+      for(const n of rows){
+        if(n.raw){ html += `<tr><td colspan="4">${n.raw}</td></tr>`; continue; }
+        const cls = stateClass(n.state);
+        if(cls!=="full") allFull=false;
+        html += `<tr><td>${n.neighbor_id||""}</td><td><span class="pill ${cls}">${n.state||""}</span></td><td>${n.address||""}</td><td>${n.interface||""}</td></tr>`;
+      }
+      html += `</table>`;
+    }
+    document.getElementById("ospfContent").innerHTML = html;
+    setDot("dotOspf", allFull);
+    ts("ospfTs");
+  }catch(e){ document.getElementById("ospfContent").innerHTML=`<p style="color:#fc8181">Error: ${e}</p>`; setDot("dotOspf",false); }
+}
+
+async function fetchBgp(){
+  try{
+    const r = await fetch('/api/bgp_summary');
+    const data = await r.json();
+    let html = "";
+    let hasEstablished = false;
+    let hasWarning = false;
+    let hasError = false;
+    for(const [router, val] of Object.entries(data)){
+      if(val.error){ html += `<p style="font-size:.75rem;color:#fc8181">❌ ${router}: ${val.error}</p>`; hasError=true; continue; }
+      const peers = val.peers || [];
+      html += `<p style="font-size:.75rem;color:#a0aec0;margin:.4rem 0 .25rem">${router}</p>`;
+      if(!peers.length){ html += `<p style="font-size:.75rem;color:#f6e05e">No peers</p>`; hasWarning=true; continue; }
+      html += `<table><tr><th>Neighbor</th><th>AS</th><th>State</th><th>Up/Down</th></tr>`;
+      for(const p of peers){
+        if(p.raw){ html += `<tr><td colspan="4">${p.raw}</td></tr>`; continue; }
+        const cls = stateClass(p.state);
+        if(cls==="established") hasEstablished = true;
+        else hasWarning = true;
+        html += `<tr><td>${p.neighbor||""}</td><td>${p.remote_as||""}</td><td><span class="pill ${cls}">${p.state||""}</span></td><td>${p.up_down||""}</td></tr>`;
+      }
+      html += `</table>`;
+    }
+    document.getElementById("bgpContent").innerHTML = html;
+    setDot("dotBgp", hasError ? false : hasEstablished ? true : "warn");
+    ts("bgpTs");
+  }catch(e){ document.getElementById("bgpContent").innerHTML=`<p style="color:#fc8181">Error: ${e}</p>`; setDot("dotBgp",false); }
+}
+
+async function fetchFlows(){
+  try{
+    const r = await fetch('/api/ryu/switches');
+    const sw = await r.json();
+    if(!r.ok) throw new Error(sw.error || 'Ryu proxy request failed');
+    const switches = sw.switches || [];
+    let html = `<p style="font-size:.75rem;color:#a0aec0;margin:.4rem 0 .25rem">Connected switches: ${switches.length}</p>`;
+    if(!switches.length){
+      html += `<p style="font-size:.75rem;color:#f6e05e">Ryu is reachable, but no switches are connected yet</p>`;
+      setDot("dotRyu", "warn");
+    } else {
+      html += `<table><tr><th>DPID</th><th>Status</th></tr>`;
+      for(const dpid of switches){
+        html += `<tr><td>${dpid}</td><td><span class="pill established">connected</span></td></tr>`;
+      }
+      html += `</table>`;
+      setDot("dotRyu", true);
+    }
+    document.getElementById("sdnContent").innerHTML = html;
+    ts("sdnTs");
+  }catch(e){ document.getElementById("sdnContent").innerHTML=`<p style="color:#fc8181">Ryu unreachable: ${e.message}</p>`; setDot("dotRyu",false); }
+}
+
+
+async function fetchSync(){
+  try{
+    const r = await fetch('/api/sync_status');
+    const data = await r.json();
+    if(!r.ok) throw new Error(data.error || 'Sync status request failed');
+    const sections = [];
+    const rows = [];
+    const badge = data.overall_in_sync ? 'established' : 'down';
+    setDot('dotSync', data.overall_in_sync);
+    sections.push(`<p style="font-size:.75rem;color:#a0aec0;margin:.4rem 0 .25rem">${data.overall_in_sync ? 'In sync' : 'Drift detected'}</p>`);
+    if(data.changed_files && data.changed_files.length){
+      sections.push(`<p style="font-size:.75rem;color:#f6e05e">Changed files: ${data.changed_files.join(', ')}</p>`);
+    }
+    for(const [name, info] of Object.entries(data.routers || {})){
+      rows.push(`<div class="sync-item"><h3>${name} <span class="pill ${info.in_sync ? 'established' : 'down'}">${info.in_sync ? 'In Sync' : 'Drift'}</span></h3><div class="sync-meta">OSPF: ${info.actual?.ospf ? 'OK' : 'Mismatch'}<br>BGP: ${info.actual?.bgp ? 'OK' : 'Mismatch'}</div></div>`);
+    }
+    const dns = data.dns || {};
+    rows.push(`<div class="sync-item"><h3>DNS <span class="pill ${dns.in_sync ? 'established' : 'down'}">${dns.in_sync ? 'In Sync' : 'Drift'}</span></h3><div class="sync-meta">${Object.keys(dns.actual || {}).length ? Object.entries(dns.actual).map(([k,v]) => `${k}: ${v ? 'OK' : 'Mismatch'}`).join('<br>') : 'No DNS checks available'}</div></div>`);
+    const nginx = data.nginx || {};
+    rows.push(`<div class="sync-item"><h3>Nginx <span class="pill ${nginx.in_sync ? 'established' : 'down'}">${nginx.in_sync ? 'In Sync' : 'Drift'}</span></h3><div class="sync-meta">${Object.keys(nginx.actual || {}).length ? Object.entries(nginx.actual).map(([k,v]) => `${k}: ${v ? 'OK' : 'Mismatch'}`).join('<br>') : 'No HTTP checks available'}</div></div>`);
+    const ryu = data.ryu || {};
+    rows.push(`<div class="sync-item"><h3>Ryu <span class="pill ${ryu.in_sync ? 'established' : 'down'}">${ryu.in_sync ? 'In Sync' : 'Drift'}</span></h3><div class="sync-meta">Switches: ${(ryu.actual && ryu.actual.switches || []).length}</div></div>`);
+    document.getElementById('syncContent').innerHTML = sections.join('') + `<div class="sync-grid">${rows.join('')}</div>`;
+    ts('syncTs');
+  }catch(e){
+    document.getElementById('syncContent').innerHTML = `<p style="color:#fc8181">Error: ${e}</p>`;
+    setDot('dotSync', false);
+  }
+}
+async function activatePath(profile){
+  try{
+    const r = await fetch('/api/ryu/activate_path', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({profile})
+    });
+    const data = await r.json();
+    if(!r.ok) throw new Error(data.error || 'Ryu proxy request failed');
+    alert(`Path "${profile}" activated on ${(data.switches||[]).length} switch(es)`);
+    fetchFlows();
+  }catch(e){ alert("Failed: "+e.message); }
+}
+
+function refreshAll(){ fetchSync(); fetchOspf(); fetchBgp(); fetchFlows(); }
+
+function toggleAuto(){
+  if(document.getElementById("autoRefresh").checked){
+    autoTimer = setInterval(refreshAll, 10000);
+    refreshAll();
+  } else {
+    clearInterval(autoTimer);
+  }
+}
+</script>
 </body>
 </html>

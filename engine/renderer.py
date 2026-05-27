@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 from pathlib import Path
 from typing import Any
 
@@ -87,7 +88,7 @@ class TemplateRenderer:
             context = {
                 "organization": intent.get("organization", {}),
                 "networks": intent.get("networks", []),
-                "routing": dict(intent.get("routing", {})),
+                "routing": copy.deepcopy(intent.get("routing", {})),
                 "services": intent.get("services", {}),
             }
             routing = context.setdefault("routing", {})
