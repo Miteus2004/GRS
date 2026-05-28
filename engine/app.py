@@ -7,14 +7,43 @@ from engine.parser import load_intent as load_intent_file
 from engine.renderer import TemplateRenderer
 from engine.provisioner import Provisioner
 from engine.sdn import RyuClient
+from engine.monitor import NagiosClient
 from engine.status import collect_sync_status
+from engine.activity import append_event
+from engine.activity import read_events
+from engine.observability import collect_last_delta, collect_path_state, collect_service_health
 
 app = FastAPI()
 
-INTENT_FILE = Path("/intent.yaml")
+INTENT_FILE = Path(os.getenv("IBN_INTENT_FILE", "/intent.yaml"))
 RYU_URL = os.getenv("RYU_URL", "http://ibn_ryu:8080")
 TEMPLATE_DIR = Path(os.getenv("IBN_TEMPLATE_DIR", "/app/templates"))
+
+# Prefer repo-local templates when running outside the container
+if not TEMPLATE_DIR.exists():
+    repo_templates = Path(__file__).resolve().parents[1] / "templates"
+    if repo_templates.exists():
+        TEMPLATE_DIR = repo_templates
 OUTPUT_DIR = Path(os.getenv("IBN_OUTDIR", "/app/out"))
+
+# When running outside the container (local dev) prefer the repo-local intent file
+if not INTENT_FILE.exists():
+    repo_intent = Path(__file__).resolve().parents[1] / "intent.yaml"
+    if repo_intent.exists():
+        INTENT_FILE = repo_intent
+
+# If the configured output dir isn't writable (e.g. running locally, not in container),
+# fall back to the repo `out/` directory so the app can bootstrap without permission errors.
+try:
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    testfile = OUTPUT_DIR / ".writetest"
+    with testfile.open("w") as fh:
+        fh.write("ok")
+    testfile.unlink()
+except Exception:
+    repo_out = Path(__file__).resolve().parents[1] / "out"
+    OUTPUT_DIR = repo_out
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def _ryu_client() -> RyuClient:
@@ -32,6 +61,10 @@ def build_inventory(intent: dict):
         }
     return inventory
 
+
+def _path_state(intent: dict) -> dict:
+    return collect_path_state(intent, nagios_client_cls=NagiosClient, provisioner_cls=Provisioner)
+
 def load_intent():
     return load_intent_file(INTENT_FILE)
 
@@ -41,7 +74,8 @@ def bootstrap_output_bundle() -> None:
     """Render the current intent bundle so the dashboard can compare against a baseline."""
     intent = load_intent()
     renderer = TemplateRenderer(TEMPLATE_DIR)
-    renderer.write_bundle(intent, OUTPUT_DIR)
+    written = renderer.write_bundle(intent, OUTPUT_DIR)
+    append_event(OUTPUT_DIR, "render", "Bootstrap bundle rendered", {"files": sorted(written.keys()), "changed_files": []})
 
 
 def parse_ospf(text: str):
@@ -132,7 +166,7 @@ def ospf_neighbors():
     results = {}
     for name in inv:
         try:
-            raw = p.check_ospf_neighbors(name)
+            raw = p.check_ospf_neighbors(name, use_exec=True)
             results[name] = {"raw": raw, "parsed": parse_ospf(raw)}
         except Exception as e:
             results[name] = {"error": str(e)}
@@ -146,7 +180,7 @@ def bgp_summary():
     results = {}
     for name in inv:
         try:
-            raw = p.check_bgp_summary(name)
+            raw = p.check_bgp_summary(name, use_exec=True)
             results[name] = parse_bgp(raw)
         except Exception as e:
             results[name] = {"error": str(e)}
@@ -172,6 +206,42 @@ def sync_status():
         return JSONResponse({"error": str(exc)}, status_code=502)
 
 
+@app.get("/api/path_state")
+def path_state():
+    try:
+        intent = load_intent()
+        return JSONResponse(_path_state(intent))
+    except Exception as exc:
+        return JSONResponse({"error": str(exc)}, status_code=502)
+
+
+@app.get("/api/service_health")
+def service_health():
+    try:
+        intent = load_intent()
+        return JSONResponse(collect_service_health(intent))
+    except Exception as exc:
+        return JSONResponse({"error": str(exc)}, status_code=502)
+
+
+@app.get("/api/last_delta")
+def last_delta():
+    try:
+        intent = load_intent()
+        return JSONResponse(collect_last_delta(TEMPLATE_DIR, OUTPUT_DIR, intent))
+    except Exception as exc:
+        return JSONResponse({"error": str(exc)}, status_code=502)
+
+
+@app.get("/api/activity_log")
+def activity_log(limit: int = 20):
+    try:
+        events = read_events(OUTPUT_DIR, limit=limit)
+        return JSONResponse({"events": events})
+    except Exception as exc:
+        return JSONResponse({"error": str(exc)}, status_code=502)
+
+
 @app.post("/api/ryu/activate_path")
 def ryu_activate_path(payload: dict):
     profile = payload.get("profile", "primary")
@@ -187,5 +257,13 @@ def ryu_activate_path(payload: dict):
 
 @app.get("/")
 def index():
-    html = Path("/app/static/index.html").read_text(encoding="utf-8")
-    return HTMLResponse(html)
+    # Prefer container path, but fall back to local workspace static path for dev
+    container_index = Path("/app/static/index.html")
+    if container_index.exists():
+        html = container_index.read_text(encoding="utf-8")
+        return HTMLResponse(html)
+    local_index = Path(__file__).resolve().parents[1] / "engine" / "static" / "index.html"
+    if local_index.exists():
+        html = local_index.read_text(encoding="utf-8")
+        return HTMLResponse(html)
+    return HTMLResponse("<html><body><h1>Index not found</h1></body></html>")

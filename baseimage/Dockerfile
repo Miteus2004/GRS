@@ -1,5 +1,5 @@
 FROM ubuntu:20.04
-RUN apt update && apt install -y vim iproute2 iputils-ping tcpdump iptables dnsutils curl
+RUN apt update && apt install -y vim iproute2 iputils-ping tcpdump iptables dnsutils curl traceroute
 RUN apt update && apt install -y quagga
 RUN apt update && apt install -y openvswitch-switch
 RUN apt update && apt install -y openssh-server

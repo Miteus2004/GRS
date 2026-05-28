@@ -115,6 +115,8 @@ def build_reconcile_plan(
     changed_files: list[str] = []
 
     for filename, desired_text in desired_bundle.items():
+        if filename == "ospfd.conf":
+            continue
         current_text = _read_text(output_root / filename)
         if current_text == desired_text:
             continue

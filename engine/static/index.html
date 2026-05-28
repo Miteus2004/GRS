@@ -38,6 +38,23 @@
     .sync-item{border:1px solid #2d3748;border-radius:8px;padding:.75rem;background:#141923}
     .sync-item h3{font-size:.8rem;margin-bottom:.35rem;color:#fff;display:flex;justify-content:space-between;gap:.5rem}
     .sync-meta{font-size:.72rem;color:#a0aec0;line-height:1.4}
+    .path-box{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.75rem}
+    .path-card{border:1px solid #2d3748;border-radius:8px;padding:.75rem;background:#141923}
+    .path-card h3{font-size:.8rem;margin-bottom:.35rem;color:#fff;display:flex;justify-content:space-between;gap:.5rem}
+    .log-list{display:flex;flex-direction:column;gap:.5rem;max-height:260px;overflow-y:auto}
+    .log-item{border:1px solid #2d3748;border-radius:8px;padding:.65rem .75rem;background:#141923}
+    .log-head{display:flex;justify-content:space-between;gap:.75rem;font-size:.72rem;color:#a0aec0;margin-bottom:.25rem;flex-wrap:wrap}
+    .log-message{font-size:.78rem;color:#e2e8f0}
+    .log-details{font-size:.7rem;color:#94a3b8;margin-top:.3rem;white-space:pre-wrap}
+    .health-list{display:flex;flex-direction:column;gap:.5rem}
+    .health-item{border:1px solid #2d3748;border-radius:8px;padding:.65rem .75rem;background:#141923}
+    .health-head{display:flex;justify-content:space-between;gap:.75rem;flex-wrap:wrap;align-items:center;font-size:.75rem;margin-bottom:.25rem}
+    .health-name{font-weight:600;color:#fff}
+    .health-meta{font-size:.72rem;color:#a0aec0;line-height:1.35}
+    .delta-list{display:flex;flex-direction:column;gap:.5rem}
+    .delta-item{border:1px solid #2d3748;border-radius:8px;padding:.65rem .75rem;background:#141923}
+    .delta-item h3{font-size:.8rem;color:#fff;display:flex;justify-content:space-between;gap:.5rem;margin-bottom:.25rem}
+    .delta-meta{font-size:.72rem;color:#a0aec0;line-height:1.35}
     .ts{font-size:.7rem;color:#718096;text-align:right;margin-top:.5rem}
     pre{font-size:.75rem;color:#a0aec0;white-space:pre-wrap;max-height:200px;overflow-y:auto}
     .auto-row{display:flex;align-items:center;gap:.5rem;margin-bottom:.75rem}
@@ -84,6 +101,20 @@
   </div>
 </div>
 
+<div class="grid">
+  <div class="card">
+    <h2>Service Health <button class="btn" onclick="fetchHealth()">Fetch</button></h2>
+    <div id="healthContent"><p style="color:#718096;font-size:.8rem">DNS, load balancer, and web response times</p></div>
+    <div class="ts" id="healthTs"></div>
+  </div>
+
+  <div class="card">
+    <h2>Delta on Last Run <button class="btn" onclick="fetchDelta()">Fetch</button></h2>
+    <div id="deltaContent"><p style="color:#718096;font-size:.8rem">What the engine changed most recently</p></div>
+    <div class="ts" id="deltaTs"></div>
+  </div>
+</div>
+
 <!-- SDN card -->
 <div class="card" style="margin-bottom:1rem">
   <h2>SDN — Ryu Flow Rules
@@ -95,6 +126,20 @@
   </h2>
   <div id="sdnContent"><p style="color:#718096;font-size:.8rem">Click Fetch flows to inspect OVS flow tables</p></div>
   <div class="ts" id="sdnTs"></div>
+</div>
+
+<div class="grid">
+  <div class="card">
+    <h2>Traffic Path <button class="btn" onclick="fetchPath()">Fetch</button></h2>
+    <div id="pathContent"><p style="color:#718096;font-size:.8rem">Shows which path is active and why</p></div>
+    <div class="ts" id="pathTs"></div>
+  </div>
+
+  <div class="card">
+    <h2>Provisioning Log <button class="btn" onclick="fetchLog()">Fetch</button></h2>
+    <div id="logContent"><p style="color:#718096;font-size:.8rem">Recent engine actions</p></div>
+    <div class="ts" id="logTs"></div>
+  </div>
 </div>
 
 <script>
@@ -192,6 +237,93 @@ async function fetchFlows(){
   }catch(e){ document.getElementById("sdnContent").innerHTML=`<p style="color:#fc8181">Ryu unreachable: ${e.message}</p>`; setDot("dotRyu",false); }
 }
 
+async function fetchPath(){
+  try{
+    const r = await fetch('/api/path_state');
+    const data = await r.json();
+    if(!r.ok) throw new Error(data.error || 'Path state request failed');
+    const activePath = data.actual?.active_path || 'unknown';
+    const congested = data.actual?.congested_hosts || [];
+    const details = data.details?.decision || {};
+    let html = `<div class="path-box">`;
+    html += `<div class="path-card"><h3>Active Path <span class="pill ${activePath === 'backup' ? 'down' : 'established'}">${activePath}</span></h3><div class="sync-meta">Decision: ${details.path || activePath}</div></div>`;
+    html += `<div class="path-card"><h3>Congested Hosts <span class="pill ${congested.length ? 'down' : 'established'}">${congested.length}</span></h3><div class="sync-meta">${congested.length ? congested.join(', ') : 'None'}</div></div>`;
+    html += `<div class="path-card"><h3>Profiles <span class="pill established">${(details.profiles || []).length}</span></h3><div class="sync-meta">${(details.profiles || []).join(', ')}</div></div>`;
+    html += `</div>`;
+    document.getElementById('pathContent').innerHTML = html;
+    ts('pathTs');
+  }catch(e){
+    document.getElementById('pathContent').innerHTML = `<p style="color:#fc8181">Error: ${e}</p>`;
+  }
+}
+
+async function fetchHealth(){
+  try{
+    const r = await fetch('/api/service_health');
+    const data = await r.json();
+    if(!r.ok) throw new Error(data.error || 'Service health request failed');
+    const checks = data.checks || [];
+    let html = `<div class="health-list">`;
+    for(const item of checks){
+      const pillClass = item.up ? 'established' : 'down';
+      html += `<div class="health-item"><div class="health-head"><span class="health-name">${item.kind.toUpperCase()} ${item.name || ''}</span><span class="pill ${pillClass}">${item.up ? 'up' : 'down'}</span></div><div class="health-meta">Endpoint: ${item.endpoint || ''}<br>Response: ${item.response_ms ?? 'n/a'} ms<br>${item.detail || ''}</div></div>`;
+    }
+    if(!checks.length){
+      html += `<div class="health-item"><div class="health-meta">No health checks available</div></div>`;
+    }
+    html += `</div>`;
+    document.getElementById('healthContent').innerHTML = html;
+    ts('healthTs');
+  }catch(e){
+    document.getElementById('healthContent').innerHTML = `<p style="color:#fc8181">Error: ${e}</p>`;
+  }
+}
+
+async function fetchDelta(){
+  try{
+    const r = await fetch('/api/last_delta');
+    const data = await r.json();
+    if(!r.ok) throw new Error(data.error || 'Delta request failed');
+    const changedFiles = data.changed_files || [];
+    const changedRouters = data.changed_routers || [];
+    const lastRunSummary = data.last_run_summary || 'No recent run';
+    const lastRunDetails = data.last_run_details || {};
+    let html = `<div class="delta-list">`;
+    html += `<div class="delta-item"><h3><span>Last Run</span><span class="pill established">${data.drift_detected ? 'changed' : 'clean'}</span></h3><div class="delta-meta">${lastRunSummary}<br>Kind: ${data.last_run?.kind || 'n/a'}<br>Changed files: ${changedFiles.length ? changedFiles.join(', ') : 'none'}<br>Changed routers: ${changedRouters.length ? changedRouters.join(', ') : 'none'}</div></div>`;
+    if(Object.keys(lastRunDetails).length){
+      html += `<div class="delta-item"><h3><span>Details</span><span class="pill established">event</span></h3><div class="delta-meta"><pre>${JSON.stringify(lastRunDetails, null, 2)}</pre></div></div>`;
+    }
+    html += `</div>`;
+    document.getElementById('deltaContent').innerHTML = html;
+    ts('deltaTs');
+  }catch(e){
+    document.getElementById('deltaContent').innerHTML = `<p style="color:#fc8181">Error: ${e}</p>`;
+  }
+}
+
+async function fetchLog(){
+  try{
+    const r = await fetch('/api/activity_log?limit=12');
+    const data = await r.json();
+    if(!r.ok) throw new Error(data.error || 'Activity log request failed');
+    const events = data.events || [];
+    let html = `<div class="log-list">`;
+    if(!events.length){
+      html += `<div class="log-item"><div class="log-message">No engine events recorded yet</div></div>`;
+    } else {
+      for(const ev of events.slice().reverse()){
+        const details = ev.details && Object.keys(ev.details).length ? JSON.stringify(ev.details, null, 2) : '';
+        html += `<div class="log-item"><div class="log-head"><span>${ev.kind || 'event'}</span><span>${ev.timestamp || ''}</span></div><div class="log-message">${ev.message || ''}</div>${details ? `<div class="log-details">${details}</div>` : ''}</div>`;
+      }
+    }
+    html += `</div>`;
+    document.getElementById('logContent').innerHTML = html;
+    ts('logTs');
+  }catch(e){
+    document.getElementById('logContent').innerHTML = `<p style="color:#fc8181">Error: ${e}</p>`;
+  }
+}
+
 
 async function fetchSync(){
   try{
@@ -235,7 +367,7 @@ async function activatePath(profile){
   }catch(e){ alert("Failed: "+e.message); }
 }
 
-function refreshAll(){ fetchSync(); fetchOspf(); fetchBgp(); fetchFlows(); }
+function refreshAll(){ fetchSync(); fetchOspf(); fetchBgp(); fetchFlows(); fetchPath(); fetchHealth(); fetchDelta(); fetchLog(); }
 
 function toggleAuto(){
   if(document.getElementById("autoRefresh").checked){

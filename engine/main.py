@@ -11,8 +11,10 @@ from .parser import load_intent
 from .renderer import TemplateRenderer
 from .provisioner import Provisioner
 from .monitor import NagiosClient
-from .sdn import RyuClient, choose_path, path_summary
+from .sdn import RyuClient
 from .planner import build_reconcile_plan, format_plan
+from .activity import append_event
+from .observability import collect_path_state
 
 
 def build_argument_parser() -> argparse.ArgumentParser:
@@ -30,7 +32,7 @@ def build_argument_parser() -> argparse.ArgumentParser:
                    help="Run reconciliation continuously instead of once")
     p.add_argument("--interval", type=int, default=30,
                    help="Seconds between reconciliation passes in loop mode")
-    p.add_argument("--ryu-url",   default="http://localhost:8080")
+    p.add_argument("--ryu-url",   default="http://ibn_ryu:8080")
     return p
 
 
@@ -41,7 +43,7 @@ def reconcile(
     provision: bool = False,
     monitor: bool = False,
     dry_run: bool = False,
-    ryu_url: str = "http://localhost:8080",
+    ryu_url: str = "http://ibn_ryu:8080",
 ) -> int:
     print(f"[IBN] Loading intent from {intent_path}")
     intent = load_intent(intent_path)
@@ -49,6 +51,7 @@ def reconcile(
     plan = build_reconcile_plan(intent, template_dir, output_dir)
     if dry_run:
         print(format_plan(plan))
+        append_event(output_dir, "plan", "Generated dry-run plan", {"changed_files": plan.changed_files, "changed_routers": plan.changed_routers})
         return 0
 
     if plan.has_changes:
@@ -59,6 +62,7 @@ def reconcile(
     print("[IBN] Rendering configuration bundle")
     renderer = TemplateRenderer(template_dir)
     written  = renderer.write_bundle(intent, output_dir)
+    append_event(output_dir, "render", "Rendered configuration bundle", {"files": sorted(written.keys()), "changed_files": plan.changed_files})
     for name, path in written.items():
         print(f"  {name} → {path}")
     print(f"[IBN] {len(written)} files written to '{output_dir}'")
@@ -70,32 +74,30 @@ def reconcile(
         for router, status in results.items():
             tag = "OK" if "ERROR" not in status else "FAIL"
             print(f"  [{tag}] {router}")
+            append_event(output_dir, "provision", f"Reloaded {router}", {"status": status, "changed": plan.changed_files})
     elif provision:
         print("[IBN] Provisioning skipped because no drift was detected")
+        append_event(output_dir, "provision", "Provisioning skipped because no drift was detected", {"changed": plan.changed_files})
 
     if monitor:
-        nagios_url = intent.get("services", {}).get("monitoring", {}).get("nagios_url", "")
-        if not nagios_url:
-            print("[IBN] No nagios_url in intent, skipping monitor check")
-        else:
-            print(f"[IBN] Polling Nagios at {nagios_url}")
-            try:
-                client = NagiosClient(nagios_url)
-                bad = client.congested_hosts()
-                ryu = RyuClient(ryu_url)
-                switches = ryu.list_switches()
-                if bad:
-                    decision = path_summary(bad)
-                    path = choose_path(bad)
-                    print(f"[IBN] Congestion detected on: {bad} — activating {path} path")
-                    for dpid in switches:
-                        ryu.activate_path(dpid, path)
-                else:
-                    print("[IBN] All hosts OK — activating primary path")
-                    for dpid in switches:
-                        ryu.activate_path(dpid, "primary")
-            except Exception as exc:
-                print(f"[IBN] Monitor check failed: {exc}", file=sys.stderr)
+        try:
+            path_state = collect_path_state(intent, nagios_client_cls=NagiosClient, provisioner_cls=Provisioner)
+            bad = path_state["actual"]["congested_hosts"]
+            print(f"[IBN] Path state: {path_state['actual']['active_path']} with congestion {bad}")
+            ryu = RyuClient(ryu_url)
+            switches = ryu.list_switches()
+            if bad:
+                path = "backup"
+                print(f"[IBN] Congestion detected on: {bad} — activating {path} path")
+            else:
+                path = "primary"
+                print("[IBN] No congestion detected — activating primary path")
+            for dpid in switches:
+                ryu.activate_path(dpid, path)
+            append_event(output_dir, "path", f"Activated {path} path", {"congested_hosts": bad, "switches": switches, "signals": path_state["actual"].get("signals", [])})
+        except Exception as exc:
+            print(f"[IBN] Monitor check failed: {exc}", file=sys.stderr)
+            append_event(output_dir, "monitor_error", "Monitor check failed", {"error": str(exc)})
 
     return 0
 
@@ -107,7 +109,7 @@ def reconcile_loop(
     provision: bool = False,
     monitor: bool = False,
     dry_run: bool = False,
-    ryu_url: str = "http://localhost:8080",
+    ryu_url: str = "http://ibn_ryu:8080",
     interval: int = 30,
 ) -> int:
     while True:
