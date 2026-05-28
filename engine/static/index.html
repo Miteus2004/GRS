@@ -55,6 +55,10 @@
     .delta-item{border:1px solid #2d3748;border-radius:8px;padding:.65rem .75rem;background:#141923}
     .delta-item h3{font-size:.8rem;color:#fff;display:flex;justify-content:space-between;gap:.5rem;margin-bottom:.25rem}
     .delta-meta{font-size:.72rem;color:#a0aec0;line-height:1.35}
+    .result-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.75rem}
+    .result-item{border:1px solid #2d3748;border-radius:8px;padding:.65rem .75rem;background:#141923}
+    .result-item h3{font-size:.8rem;color:#fff;display:flex;justify-content:space-between;gap:.5rem;margin-bottom:.25rem}
+    .result-meta{font-size:.72rem;color:#a0aec0;line-height:1.35}
     .ts{font-size:.7rem;color:#718096;text-align:right;margin-top:.5rem}
     pre{font-size:.75rem;color:#a0aec0;white-space:pre-wrap;max-height:200px;overflow-y:auto}
     .auto-row{display:flex;align-items:center;gap:.5rem;margin-bottom:.75rem}
@@ -113,6 +117,12 @@
     <div id="deltaContent"><p style="color:#718096;font-size:.8rem">What the engine changed most recently</p></div>
     <div class="ts" id="deltaTs"></div>
   </div>
+</div>
+
+<div class="card" style="margin-bottom:1rem">
+  <h2>Demo Results <button class="btn" onclick="fetchDemoResults()">Fetch</button></h2>
+  <div id="demoResultsContent"><p style="color:#718096;font-size:.8rem">Presentation-friendly values for fault tolerance and SDN</p></div>
+  <div class="ts" id="demoResultsTs"></div>
 </div>
 
 <!-- SDN card -->
@@ -301,6 +311,28 @@ async function fetchDelta(){
   }
 }
 
+async function fetchDemoResults(){
+  try{
+    const r = await fetch('/api/demo_results');
+    const data = await r.json();
+    if(!r.ok) throw new Error(data.error || 'Demo results request failed');
+    const ft = data.fault_tolerance || {};
+    const times = data.service_times_ms || {};
+    const sdn = data.sdn_comparison || {};
+    const demoStatus = data.demo_status || {};
+    let html = `<div class="result-grid">`;
+    html += `<div class="result-item"><h3><span>Fault Tolerance</span><span class="pill ${ft.overall_in_sync ? 'established' : 'down'}">${ft.overall_in_sync ? 'ok' : 'issue'}</span></h3><div class="result-meta">Routers in sync: ${ft.routers_in_sync || 0}/${ft.routers_total || 0}<br>OSPF up: ${ft.ospf_up || 0}<br>BGP up: ${ft.bgp_up || 0}<br>Web up: ${ft.web_up || 0}/${ft.web_total || 0}</div></div>`;
+    html += `<div class="result-item"><h3><span>Response Times</span><span class="pill established">ms</span></h3><div class="result-meta">DNS: ${times.dns ?? 'n/a'}<br>Load balancer: ${times.load_balancer ?? 'n/a'}<br>Web avg: ${times.web_average ?? 'n/a'}</div></div>`;
+    html += `<div class="result-item"><h3><span>SDN</span><span class="pill ${sdn.with_sdn?.rerouted ? 'down' : 'established'}">${sdn.with_sdn?.active_path || 'unknown'}</span></h3><div class="result-meta">With SDN: ${sdn.with_sdn?.active_path || 'unknown'}${sdn.with_sdn?.rerouted ? ' (rerouted)' : ''}<br>No SDN: ${sdn.without_sdn?.active_path || 'primary'}<br>Difference: ${sdn.difference || ''}</div></div>`;
+    html += `<div class="result-item"><h3><span>Demo Status</span><span class="pill ${demoStatus.drift_detected ? 'down' : 'established'}">${demoStatus.drift_detected ? 'drift' : 'clean'}</span></h3><div class="result-meta">Changed files: ${demoStatus.changed_files ?? 0}<br>Changed routers: ${demoStatus.changed_routers ?? 0}</div></div>`;
+    html += `</div>`;
+    document.getElementById('demoResultsContent').innerHTML = html;
+    ts('demoResultsTs');
+  }catch(e){
+    document.getElementById('demoResultsContent').innerHTML = `<p style="color:#fc8181">Error: ${e}</p>`;
+  }
+}
+
 async function fetchLog(){
   try{
     const r = await fetch('/api/activity_log?limit=12');
@@ -367,7 +399,7 @@ async function activatePath(profile){
   }catch(e){ alert("Failed: "+e.message); }
 }
 
-function refreshAll(){ fetchSync(); fetchOspf(); fetchBgp(); fetchFlows(); fetchPath(); fetchHealth(); fetchDelta(); fetchLog(); }
+function refreshAll(){ fetchSync(); fetchOspf(); fetchBgp(); fetchFlows(); fetchPath(); fetchHealth(); fetchDelta(); fetchDemoResults(); fetchLog(); }
 
 function toggleAuto(){
   if(document.getElementById("autoRefresh").checked){

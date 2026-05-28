@@ -1,4 +1,5 @@
 import os
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -11,9 +12,7 @@ from engine.monitor import NagiosClient
 from engine.status import collect_sync_status
 from engine.activity import append_event
 from engine.activity import read_events
-from engine.observability import collect_last_delta, collect_path_state, collect_service_health
-
-app = FastAPI()
+from engine.observability import collect_demo_results, collect_last_delta, collect_path_state, collect_service_health
 
 INTENT_FILE = Path(os.getenv("IBN_INTENT_FILE", "/intent.yaml"))
 RYU_URL = os.getenv("RYU_URL", "http://ibn_ryu:8080")
@@ -46,6 +45,19 @@ except Exception:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Render the current intent bundle so the dashboard can compare against a baseline."""
+    intent = load_intent()
+    renderer = TemplateRenderer(TEMPLATE_DIR)
+    written = renderer.write_bundle(intent, OUTPUT_DIR)
+    append_event(OUTPUT_DIR, "render", "Bootstrap bundle rendered", {"files": sorted(written.keys()), "changed_files": []})
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
+
+
 def _ryu_client() -> RyuClient:
     return RyuClient(RYU_URL)
 
@@ -67,15 +79,6 @@ def _path_state(intent: dict) -> dict:
 
 def load_intent():
     return load_intent_file(INTENT_FILE)
-
-
-@app.on_event("startup")
-def bootstrap_output_bundle() -> None:
-    """Render the current intent bundle so the dashboard can compare against a baseline."""
-    intent = load_intent()
-    renderer = TemplateRenderer(TEMPLATE_DIR)
-    written = renderer.write_bundle(intent, OUTPUT_DIR)
-    append_event(OUTPUT_DIR, "render", "Bootstrap bundle rendered", {"files": sorted(written.keys()), "changed_files": []})
 
 
 def parse_ospf(text: str):
@@ -229,6 +232,15 @@ def last_delta():
     try:
         intent = load_intent()
         return JSONResponse(collect_last_delta(TEMPLATE_DIR, OUTPUT_DIR, intent))
+    except Exception as exc:
+        return JSONResponse({"error": str(exc)}, status_code=502)
+
+
+@app.get("/api/demo_results")
+def demo_results():
+    try:
+        intent = load_intent()
+        return JSONResponse(collect_demo_results(intent, TEMPLATE_DIR, OUTPUT_DIR, RYU_URL))
     except Exception as exc:
         return JSONResponse({"error": str(exc)}, status_code=502)
 

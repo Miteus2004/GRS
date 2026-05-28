@@ -91,7 +91,7 @@ The demo is easiest to show with two terminals: one for the engine loop and one 
 docker compose up -d --build
 ```
 
-Open `http://localhost:5000` and keep the dashboard visible. The new panels are `Sync Status`, `Traffic Path`, `Service Health`, `Delta on Last Run`, `Provisioning Log`, `OSPF Neighbors`, `BGP Summary`, and `SDN`.
+Open `http://localhost:5000` and keep the dashboard visible. The new panels are `Sync Status`, `Traffic Path`, `Service Health`, `Delta on Last Run`, `Provisioning Log`, `OSPF Neighbors`, `BGP Summary`, `SDN`, and `Demo Results`.
 
 2. Show a clean initial plan.
 
@@ -189,7 +189,7 @@ docker exec -it ibn_engine python -m engine.main --monitor --intent /intent.yaml
 
 10. Finish by showing the dashboard history.
 
-The `Provisioning Log` panel should now contain the plan, render, provisioning, and path-switch history that explains the sequence you just ran. The `Service Health` panel shows response times for DNS, the load balancer, and the web backends, and `Delta on Last Run` highlights what the engine changed most recently.
+The `Provisioning Log` panel should now contain the plan, render, provisioning, and path-switch history that explains the sequence you just ran. The `Service Health` panel shows response times for DNS, the load balancer, and the web backends, `Delta on Last Run` highlights what the engine changed most recently, and `Demo Results` condenses the fault-tolerance counts, SDN path comparison, and timing values into a presentation-friendly summary.
 
 Notes
 - If containers fail to start, check `docker compose ps` and container logs with `docker compose logs <service>`.

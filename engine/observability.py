@@ -32,6 +32,7 @@ from .parser import load_intent
 from .planner import build_reconcile_plan
 from .provisioner import Provisioner
 from .sdn import choose_path, path_summary
+from .status import collect_sync_status
 
 
 QDISC_DELAY_RE = re.compile(r"\bdelay\s+(?P<delay>\d+(?:\.\d+)?)\s*(?P<unit>us|ms|s)?", re.IGNORECASE)
@@ -320,4 +321,70 @@ def collect_last_delta(template_dir: str | Path, output_dir: str | Path, intent:
         "last_run": last_event,
         "last_run_summary": last_event.get("message") if last_event else "No engine run recorded yet",
         "last_run_details": last_event.get("details", {}) if last_event else {},
+    }
+
+
+def collect_demo_results(
+    intent: dict[str, Any],
+    template_dir: str | Path,
+    output_dir: str | Path,
+    ryu_url: str,
+) -> dict[str, Any]:
+    """Summarize the demo in presentation-friendly values."""
+    sync = collect_sync_status(intent, template_dir, output_dir, ryu_url)
+    health = collect_service_health(intent)
+    path = collect_path_state(intent)
+    delta = collect_last_delta(template_dir, output_dir, intent)
+
+    router_total = len(sync.get("routers", {}))
+    router_in_sync = sum(1 for info in sync.get("routers", {}).values() if info.get("in_sync"))
+    ospf_up = sum(1 for info in sync.get("routers", {}).values() if info.get("actual", {}).get("ospf"))
+    bgp_up = sum(1 for info in sync.get("routers", {}).values() if info.get("actual", {}).get("bgp"))
+
+    dns_check = next((item for item in health.get("checks", []) if item.get("kind") == "dns"), {})
+    lb_check = next((item for item in health.get("checks", []) if item.get("kind") == "lb"), {})
+    web_checks = [item for item in health.get("checks", []) if item.get("kind") == "web"]
+
+    web_up = sum(1 for item in web_checks if item.get("up"))
+    web_total = len(web_checks)
+    web_avg_ms = round(sum(item.get("response_ms", 0.0) for item in web_checks) / web_total, 1) if web_total else 0.0
+
+    active_path = path.get("actual", {}).get("active_path", "unknown")
+    congested_hosts = path.get("actual", {}).get("congested_hosts", [])
+
+    return {
+        "fault_tolerance": {
+            "overall_in_sync": sync.get("overall_in_sync", False),
+            "routers_in_sync": router_in_sync,
+            "routers_total": router_total,
+            "ospf_up": ospf_up,
+            "bgp_up": bgp_up,
+            "dns_up": bool(dns_check.get("up")),
+            "lb_up": bool(lb_check.get("up")),
+            "web_up": web_up,
+            "web_total": web_total,
+        },
+        "service_times_ms": {
+            "dns": dns_check.get("response_ms", 0.0),
+            "load_balancer": lb_check.get("response_ms", 0.0),
+            "web_average": web_avg_ms,
+        },
+        "sdn_comparison": {
+            "with_sdn": {
+                "active_path": active_path,
+                "rerouted": active_path == "backup",
+                "congested_hosts": congested_hosts,
+            },
+            "without_sdn": {
+                "active_path": "primary",
+                "rerouted": False,
+                "congested_hosts": congested_hosts,
+            },
+            "difference": "backup path activated on congestion when SDN is enabled; primary path remains fixed without SDN",
+        },
+        "demo_status": {
+            "drift_detected": delta.get("drift_detected", False),
+            "changed_files": len(delta.get("changed_files", [])),
+            "changed_routers": len(delta.get("changed_routers", [])),
+        },
     }

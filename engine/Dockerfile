@@ -1,24 +1,16 @@
-FROM python:3.9-slim
+FROM python:3.11.15-slim-trixie
 
 WORKDIR /app
 
 # gcc needed for some netmiko/cryptography deps
-RUN apt-get update && apt-get install -y --no-install-recommends gcc libffi-dev && \
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends gcc libffi-dev && \
     rm -rf /var/lib/apt/lists/*
 
 # Pin setuptools to a version compatible with ryu's setup.py hooks
 RUN pip install --no-cache-dir "setuptools==65.5.0"
 
-RUN pip install --no-cache-dir \
-    fastapi==0.103.2 \
-    "uvicorn[standard]==0.23.2" \
-    netmiko==4.3.0 \
-    jinja2>=3.1 \
-    pyyaml>=6.0 \
-    requests>=2.31 \
-    dnspython==1.16.0 \
-    ryu==4.34 \
-    eventlet==0.32.0
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy engine package, ryu app, templates, and web app
 COPY engine/   ./engine/
