@@ -13,12 +13,6 @@ from ryu.ofproto import ofproto_v1_3
 
 
 class IBNController(app_manager.RyuApp):
-    """OpenFlow 1.3 controller with REST API for the IBN engine.
-
-    Start with:
-        ryu-manager ryu_app/ibn_controller.py --wsapi-port 8080
-    """
-
     OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
     _CONTEXTS    = {"wsgi": WSGIApplication}
 

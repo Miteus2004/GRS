@@ -22,8 +22,8 @@ TEMPLATE_MAP = {
     "bgpd.conf.j2":          "bgpd.conf",
     "named.conf.options.j2": "named.conf.options",
     "named.conf.local.j2":   "named.conf.local",
-    "zone.j2":               None,   # → db.<domain>
-    "zone_reverse.j2":       None,   # → db.<reverse_prefix>
+    "zone.j2":               None,   
+    "zone_reverse.j2":       None,  
     "nginx_upstream.j2":     "nginx.conf",
 }
 
@@ -67,15 +67,12 @@ class TemplateRenderer:
 
         written: dict[str, Path] = {}
 
-        # Write global files
         bundle = self.render_bundle(intent)
         for filename, content in bundle.items():
             dest = out / filename
             dest.write_text(content, encoding="utf-8")
             written[filename] = dest
 
-        # Render per-router configs (ospfd/zebra) when management inventory exists.
-        # Use each router's host IP as its OSPF router-id.
         for entry in intent.get("management", []):
             name = entry.get("name")
             host = entry.get("host")
@@ -84,7 +81,6 @@ class TemplateRenderer:
             router_dir = out / name
             router_dir.mkdir(parents=True, exist_ok=True)
 
-            # Build a context copy and set router-specific router-id
             context = {
                 "organization": intent.get("organization", {}),
                 "networks": intent.get("networks", []),
@@ -95,7 +91,6 @@ class TemplateRenderer:
             ospf = routing.setdefault("ospf", {})
             ospf["router_id"] = host
 
-            # Render ospfd and zebra for this router
             for tmpl_name, out_name in (("ospfd.conf.j2", "ospfd.conf"), ("zebra.conf.j2", "zebra.conf")):
                 rendered = self.render(tmpl_name, context)
                 dest = router_dir / out_name

@@ -53,8 +53,6 @@ class NagiosClient:
             if not isinstance(host_services, dict):
                 continue
 
-            # Live Nagios responses are often nested by host, while the unit tests
-            # use a flat servicelist keyed by service id. Accept both shapes.
             if "host_name" in host_services:
                 host = host_services.get("host_name") or host_key
                 if host == "localhost":

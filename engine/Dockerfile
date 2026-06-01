@@ -1,4 +1,4 @@
-FROM python:3.11.16-slim-trixie
+FROM python:3.11.15-slim-trixie
 
 WORKDIR /app
 
@@ -30,5 +30,4 @@ target = pathlib.Path(site.getsitepackages()[0]) / 'sitecustomize.py'
 shutil.copy2(source, target)
 PY
 
-# Default: run the FastAPI dashboard from the package
 CMD ["uvicorn", "engine.app:app", "--host", "0.0.0.0", "--port", "8000"]

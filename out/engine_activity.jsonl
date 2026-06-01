@@ -1,0 +1,2 @@
+{"details": {"changed_files": [], "changed_routers": []}, "kind": "plan", "message": "Generated dry-run plan", "timestamp": "2026-05-31T23:25:53.871588+00:00"}
+{"details": {"changed_files": [], "files": ["bgpd.conf", "db.172.16.123", "db.myorg.net", "named.conf.local", "named.conf.options", "nginx.conf", "ospfd.conf", "router1/ospfd.conf", "router1/zebra.conf", "router2/ospfd.conf", "router2/zebra.conf", "router3/ospfd.conf", "router3/zebra.conf", "zebra.conf"]}, "kind": "render", "message": "Bootstrap bundle rendered", "timestamp": "2026-06-01T00:08:37.594492+00:00"}

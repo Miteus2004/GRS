@@ -91,8 +91,6 @@ services:
   monitoring:
     nagios_url: http://172.16.123.139/nagios
 
-# SSH inventory for Netmiko provisioner
-# Container IPs are directly reachable on Linux via Docker bridge
 management:
   - name: router1
     host: 10.0.1.2

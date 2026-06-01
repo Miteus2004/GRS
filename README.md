@@ -1,15 +1,6 @@
-Project startup and resume instructions
-=====================================
-
 Quick steps to run this project after powering on the machine and logging in.
 
-1) Open a terminal and change to the project directory
-
-```bash
-cd /home/miguel/Desktop/uni/GRS
-```
-
-2) Activate the Python virtual environment
+1) Activate the Python virtual environment
 
 If you use the repository virtualenv (recommended):
 
@@ -25,20 +16,19 @@ source .venv/bin/activate
 pip install --upgrade pip
 ```
 
-3) Install Python dependencies (only if not already installed or after a fresh clone)
+2) Install Python dependencies (only if not already installed or after a fresh clone)
 
 ```bash
 pip install -r requirements.txt
-# or, if using pyproject.toml / poetry, use your chosen tool
 ```
 
-4) Run tests to verify environment
+3) Run tests to verify environment
 
 ```bash
 pytest -q
 ```
 
-5) Start required containers (Docker Compose)
+4) Start required containers (Docker Compose)
 
 Build and start the engine and Ryu (or the whole stack):
 
@@ -48,26 +38,26 @@ docker compose up -d --build --force-recreate engine ryu
 docker compose up -d --build
 ```
 
-6) Bootstrap / render templates (dry-run plan)
+5) Bootstrap / render templates (dry-run plan)
 
 ```bash
 python -m engine.main --plan --intent /intent.yaml --templates templates --outdir out
 ```
 
-7) Run the engine in reconciliation loop (continuous mode)
+6) Run the engine in reconciliation loop (continuous mode)
 
 ```bash
 python -m engine.main --loop --interval 30 --intent /intent.yaml --templates templates --outdir out
 ```
 
-8) Run the web dashboard/API (if not already running in Docker)
+7) Run the web dashboard/API (if not already running in Docker)
 
 ```bash
 uvicorn engine.app:app --host 0.0.0.0 --port 5000
 # Dashboard: http://localhost:5000/ (or container-mapped port)
 ```
 
-9) Useful one-off commands
+8) Useful one-off commands
 
 - Render and write bundle to `out/` without applying changes:
 

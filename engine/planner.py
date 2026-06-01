@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from difflib import unified_diff
 import copy
 from pathlib import Path
-import tempfile
 from typing import Any
 
 from .renderer import TemplateRenderer
@@ -38,14 +37,6 @@ def _read_text(path: Path) -> str | None:
     if not path.exists():
         return None
     return path.read_text(encoding="utf-8")
-
-
-def _render_preview(intent: dict[str, Any], template_dir: str | Path) -> tuple[dict[str, str], dict[str, Path]]:
-    renderer = TemplateRenderer(template_dir)
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        written = renderer.write_bundle(intent, tmp_dir)
-        rendered = {name: path.read_text(encoding="utf-8") for name, path in written.items()}
-    return rendered, {}
 
 
 def _normalize_intent(intent: dict[str, Any]) -> dict[str, Any]:
