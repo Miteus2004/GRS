@@ -50,14 +50,7 @@ python -m engine.main --plan --intent /intent.yaml --templates templates --outdi
 python -m engine.main --loop --interval 30 --intent /intent.yaml --templates templates --outdir out
 ```
 
-7) Run the web dashboard/API (if not already running in Docker)
-
-```bash
-uvicorn engine.app:app --host 0.0.0.0 --port 5000
-# Dashboard: http://localhost:5000/ (or container-mapped port)
-```
-
-8) Useful one-off commands
+7) Useful one-off commands
 
 - Render and write bundle to `out/` without applying changes:
 
@@ -98,7 +91,7 @@ docker exec -it ibn_engine python -m engine.main --plan --intent /intent.yaml --
 
 4. Demonstrate delta provisioning by adding a 5th web replica to `intent.yaml`, then rerun provisioning.
 
-After editing the intent locally, rerun:
+After editing the intent and docker compose locally, rerun:
 
 ```bash
 docker exec -it ibn_engine python -m engine.main --provision --intent /intent.yaml --templates /app/templates --outdir /app/out
